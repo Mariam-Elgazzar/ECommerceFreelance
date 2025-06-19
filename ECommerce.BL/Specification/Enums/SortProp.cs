@@ -11,8 +11,10 @@ namespace ECommerce.BL.Specification.Enums
         Id,
         Name,
         Description,
-        Price,
-        FName,
-        LName,
+        Brand,
+        Modal,
+        Quantity,
+        FirstName,
+        LastName
     }
 }

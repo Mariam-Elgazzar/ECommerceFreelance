@@ -8,7 +8,7 @@ namespace ECommerce.BL.Helper
     public class FileUploader
     {
 
-        #region Upload Media
+        #region Upload Media To Cloudinary
         /// <summary>
         /// Uploads a media file to Cloudinary and returns the media and thumbnail URLs.
         /// </summary>
@@ -29,7 +29,7 @@ namespace ECommerce.BL.Helper
                 var mediaName = $"{Guid.NewGuid()}{extension}";
 
                 using var stream = media.OpenReadStream();
-                RawUploadParams uploadParams = new RawUploadParams();
+                var uploadParams = new ImageUploadParams();
                 if (resourceType == ResourceType.Image)
                 {
                     uploadParams = new ImageUploadParams
@@ -46,24 +46,14 @@ namespace ECommerce.BL.Helper
                         UseFilename = true,
                     };
                 }
-                else if (resourceType == ResourceType.Raw)
-                {
-                    uploadParams = new RawUploadParams
-                    {
-                        File = new FileDescription(mediaName, stream),
-                        UseFilename = true,
-                    };
-                }
                 else
-                {
                     return new UploadFileDTO { IsSuccess = false, ErrorMessage = "Unsupported resource type." };
-                }
+
 
                 var result = await cloudinary.UploadAsync(uploadParams);
                 if (result.Error != null)
-                {
                     return new UploadFileDTO { IsSuccess = false, ErrorMessage = $"Error uploading media: {result.Error.Message}" };
-                }
+
 
                 var url = result.SecureUrl.ToString();
                 var thumbnailUrl = resourceType == ResourceType.Image ? GetThumbnailUrl(url) : null;
@@ -103,7 +93,7 @@ namespace ECommerce.BL.Helper
         #endregion
 
 
-        #region Remove Media
+        #region Remove Media From Cloudinary
 
         /// <summary>
         /// Deletes multiple images by their public IDs.
@@ -133,6 +123,85 @@ namespace ECommerce.BL.Helper
             return new ResultDTO { IsSuccess = true, Message = "Media removed IsSuccessfully." };
         }
 
+        #endregion
+
+
+        #region Upload Media To our Server
+        /// <summary>
+        /// Uploads a media file to the server and returns the file path.
+        /// <param name="media">The media file to upload.</param>
+        /// <returns>A DTO containing IsSuccess status, media URL, and error message.</returns>
+        public static async Task<UploadFileDTO> UploadMediaToServerAsync(IFormFile media)
+        {
+            if (media == null || media.Length == 0)
+            {
+                return new UploadFileDTO { IsSuccess = false, ErrorMessage = "Media file is required." };
+            }
+
+            try
+            {
+                
+                var extension = Path.GetExtension(media.FileName).ToLowerInvariant();
+
+                string folderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "Uploads");
+                if (!Directory.Exists(folderPath))
+                {
+                    Directory.CreateDirectory(folderPath);
+                }
+
+                string fileName = $"{Guid.NewGuid()}{extension}";
+                string finalPath = Path.Combine(folderPath, fileName);
+                string relativePath = $"/Uploads/{fileName}";
+
+                using (var stream = new FileStream(finalPath, FileMode.Create))
+                {
+                    await media.CopyToAsync(stream);
+                }
+
+                return new UploadFileDTO
+                {
+                    IsSuccess = true,
+                    MediaUrl = relativePath ,
+                    PublicId = Guid.NewGuid().ToString()
+                };
+            }
+            catch (Exception ex)
+            {
+                return new UploadFileDTO
+                {
+                    IsSuccess = false,
+                    ErrorMessage = $"An error occurred while uploading media: {ex.Message}"
+                };
+            }
+        }
+
+        #endregion
+
+
+        #region Remove Media From Server
+
+        /// <summary>
+        /// Deletes a media file from the server by its file path.
+        /// <param name="filePath">The path of the file to delete.</param>
+        /// <returns>A result indicating the IsSuccess or failure of the operation.</returns>
+        public static ResultDTO RemoveMediaFromServer(string filePath)
+        {
+            try
+            {
+                var FinalPath = Directory.GetCurrentDirectory() + "/wwwroot/" + filePath;
+                if (!File.Exists(FinalPath))
+                {
+                    return new ResultDTO { IsSuccess = false, Message = $"File not found with path: {FinalPath}" };
+                }
+                File.Delete(FinalPath);
+                return new ResultDTO { IsSuccess = true, Message = "File removed successfully." };
+            }
+            catch (Exception ex)
+            {
+                return new ResultDTO { IsSuccess = false, Message = $"An error occurred while removing the file: {ex.Message}" };
+            }
+        }
+        
         #endregion
 
     }

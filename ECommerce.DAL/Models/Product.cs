@@ -15,7 +15,8 @@ namespace ECommerce.DAL.Models
         [Required]
         public string Brand { get; set; }
         [Required]
-        public string Model { get; set; }
+        public string Modal { get; set; }
+        public int Quantity { get; set; }
         public string? MainImageURL { get; set; }
         public string? ImagePublicId { get; set; }
         [Required]

@@ -1,6 +1,7 @@
 ﻿#region Usings
 
 using ECommerce.BL.Repository;
+using ECommerce.BL.Services;
 using ECommerce.BL.Services.AuthenticationService;
 using ECommerce.BL.Services.CategoryServices;
 using ECommerce.BL.Services.EmailServices;
@@ -47,6 +48,7 @@ namespace ECommerce.BL.UnitOfWork
         private ICategoryServices _categoryService;
         private IProductServices _productService;
         private IUserServices _userService;
+        private IOrderService _orderService;
 
         #endregion
 
@@ -139,6 +141,25 @@ namespace ECommerce.BL.UnitOfWork
                 return _userService;
             }
         }
+        #endregion
+
+        #region OrderServices
+        public IOrderService OrderServices
+        {
+            get
+            {
+                if (_orderService == null)
+                {
+                    _orderService = new OrderService(
+                    this,
+                    new Logger<OrderService>(new LoggerFactory()),
+                    _orderSettings, _twilioSettings);
+                    return _orderService;
+                }
+                return _orderService;
+            }
+        }
+
         #endregion
 
         #endregion

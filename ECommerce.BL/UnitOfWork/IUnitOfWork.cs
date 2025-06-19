@@ -11,6 +11,7 @@ namespace ECommerce.BL.UnitOfWork
 {
     public interface IUnitOfWork
     {
+        IOrderService OrderServices { get; }
         IProductServices ProductServices { get; }
         ICategoryServices CategoryServices { get; }
         IEmailServices EmailServices { get; }

@@ -1,27 +1,42 @@
 ﻿using ECommerce.BL.Specification.BaseSpacification;
 using ECommerce.BL.Specification.Enums;
 using ECommerce.DAL.Models;
-using Microsoft.Data.SqlClient;
-using Microsoft.EntityFrameworkCore;
-using System.Linq.Expressions;
-using System.Text.Json;
 
 namespace ECommerce.BL.Specification.ProductSpecification
 {
     public class ProductSpecification : BaseSpecification<Product>
     {
-        
+
         /// <summary>
         /// Initializes a new instance of the <see cref="ProductSpecification"/> class for filtering and pagination.
         /// </summary>
         /// <param name="param">The parameters for filtering, sorting, and pagination.</param>
         public ProductSpecification(ProductParams param)
-            : base(BuildExpression(param))
+            : base(x => param == null ||
+            (string.IsNullOrEmpty(param.Search) &&
+            string.IsNullOrEmpty(param.Brand) &&
+            string.IsNullOrEmpty(param.Model) &&
+            string.IsNullOrEmpty(param.Status) &&
+            !param.CategoryId.HasValue &&
+            !param.Quantity.HasValue) ||
+            ((param.Search != null && (
+            (!string.IsNullOrEmpty(param.Search) && 
+            x.Name.ToLower().Contains(param.Search.ToLower())) ||
+            (x.Description != null && 
+            x.Description.ToLower().Contains(param.Search.ToLower())))) ||
+            (param.Brand != null && x.Brand != null && 
+            x.Brand.ToLower().Contains(param.Brand.ToLower())) ||
+            (param.Model != null && x.Modal != null && 
+            x.Modal.ToLower().Contains(param.Model.ToLower())) ||
+            (param.Status != null && x.Status != null && 
+            x.Status.ToLower().Contains(param.Status.ToLower())) ||
+            (param.CategoryId.HasValue && x.CategoryId == param.CategoryId.Value) ||
+            (param.Quantity.HasValue && x.Quantity == param.Quantity.Value))
+            )
         {
             // Include related data
             AddInclude(p => p.Category);
-            AddInclude(p => p.ProductMedia);
-
+            AddInclude(pm => pm.ProductMedia);
             // Sorting
             var sortProp = param.SortProp ?? SortProp.Id;
             var sortDirection = param.SortDirection ?? SortDirection.Ascending;
@@ -33,9 +48,19 @@ namespace ECommerce.BL.Specification.ProductSpecification
                     case SortProp.Name:
                         ApplyOrderBy(x => x.Name);
                         break;
-                    case SortProp.Id:
-                        ApplyOrderBy(x => x.Id);
+                    case SortProp.Description:
+                        ApplyOrderBy(x => x.Description == null ? string.Empty : x.Description);
                         break;
+                    case SortProp.Brand:
+                        ApplyOrderBy(x => x.Brand);
+                        break;
+                    case SortProp.Modal:
+                        ApplyOrderBy(x => x.Modal);
+                        break;
+                    case SortProp.Quantity:
+                        ApplyOrderBy(x => x.Quantity);
+                        break;
+                    case SortProp.Id:
                     default:
                         ApplyOrderBy(x => x.Id);
                         break;
@@ -48,9 +73,19 @@ namespace ECommerce.BL.Specification.ProductSpecification
                     case SortProp.Name:
                         ApplyOrderByDescending(x => x.Name);
                         break;
-                    case SortProp.Id:
-                        ApplyOrderByDescending(x => x.Id);
+                    case SortProp.Description:
+                        ApplyOrderByDescending(x => x.Description == null ? string.Empty : x.Description);
                         break;
+                    case SortProp.Brand:
+                        ApplyOrderByDescending(x => x.Brand);
+                        break;
+                    case SortProp.Modal:
+                        ApplyOrderByDescending(x => x.Modal);
+                        break;
+                    case SortProp.Quantity:
+                        ApplyOrderByDescending(x => x.Quantity);
+                        break;
+                    case SortProp.Id:
                     default:
                         ApplyOrderByDescending(x => x.Id);
                         break;
@@ -59,67 +94,6 @@ namespace ECommerce.BL.Specification.ProductSpecification
 
             // Pagination
             ApplyPagination(param.PageIndex, param.PageSize);
-        }
-        private static Expression<Func<Product, bool>> BuildExpression(ProductParams param)
-        {
-            Expression<Func<Product, bool>> expression = x => true;
-
-            if (!string.IsNullOrEmpty(param.Search))
-            {
-                var search = param.Search.ToLower();
-                expression = expression.And(x => x.Name.ToLower().Contains(search) ||
-                                     x.Description.ToLower().Contains(search));
-            }
-
-            if (param.CategoryId.HasValue)
-            {
-                expression = expression.And(x => x.CategoryId == param.CategoryId.Value);
-            }
-
-            if (!string.IsNullOrEmpty(param.Status))
-            {
-                expression = expression.And(x => x.Status == param.Status);
-            }
-
-            if (param.AttributesFilter != null && param.AttributesFilter.Any())
-            {
-                foreach (var attr in param.AttributesFilter)
-                {
-                    var jsonPair = $"\"{attr.Key}\":\"{attr.Value}\"";
-                    var jsonPairStart = $",{jsonPair}";
-                    var jsonPairMiddle = $",{jsonPair}";
-                    expression = expression.And(x => x.AdditionalAttributes != null &&
-                        (EF.Functions.Like(x.AdditionalAttributes, $"%{jsonPair}%") ||
-                         EF.Functions.Like(x.AdditionalAttributes, $"%{jsonPairStart}%") ||
-                         EF.Functions.Like(x.AdditionalAttributes, $"%{jsonPairMiddle}%")));
-                }
-
-            }
-            return expression;
-        }
-        public static bool AttributesFilter(Product product, ProductParams param)
-        {
-            if (param.AttributesFilter == null || !param.AttributesFilter.Any())
-            {
-                return true;
-            }
-
-            if (string.IsNullOrEmpty(product.AdditionalAttributes))
-            {
-                return false;
-            }
-
-            try
-            {
-                var attributes = JsonSerializer.Deserialize<Dictionary<string, string>>(product.AdditionalAttributes);
-                return param.AttributesFilter.All(attr =>
-                    attributes.TryGetValue(attr.Key, out var value) &&
-                    value.Equals(attr.Value, StringComparison.OrdinalIgnoreCase));
-            }
-            catch
-            {
-                return false; // Invalid JSON
-            }
         }
 
         /// <summary>
@@ -130,19 +104,7 @@ namespace ECommerce.BL.Specification.ProductSpecification
             : base(x => x.Id == id)
         {
             AddInclude(p => p.Category);
-            AddInclude(p => p.ProductMedia);
-        }
-    }
-    public static class ExpressionExtensions
-    {
-        public static Expression<Func<T, bool>> And<T>(
-            this Expression<Func<T, bool>> expr1,
-            Expression<Func<T, bool>> expr2)
-        {
-            var invokedExpr = Expression.Invoke(expr2, expr1.Parameters);
-            return Expression.Lambda<Func<T, bool>>(
-                Expression.AndAlso(expr1.Body, invokedExpr),
-                expr1.Parameters);
+            AddInclude(pm => pm.ProductMedia);
         }
     }
 }

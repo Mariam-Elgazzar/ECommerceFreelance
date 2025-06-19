@@ -22,10 +22,10 @@ namespace ECommerce.BL.Specification.UserSpecification
             {
                 switch (sortProp)
                 {
-                    case SortProp.FName:
+                    case SortProp.FirstName:
                         ApplyOrderBy(x => x.FirstName);
                         break;
-                    case SortProp.LName:
+                    case SortProp.LastName:
                         ApplyOrderBy(x => x.LastName);
                         break;
                     case SortProp.Id:
@@ -38,10 +38,10 @@ namespace ECommerce.BL.Specification.UserSpecification
             {
                 switch (sortProp)
                 {
-                    case SortProp.FName:
+                    case SortProp.FirstName:
                         ApplyOrderByDescending(x => x.FirstName);
                         break;
-                    case SortProp.LName:
+                    case SortProp.LastName:
                         ApplyOrderByDescending(x => x.LastName);
                         break;
                     case SortProp.Id:

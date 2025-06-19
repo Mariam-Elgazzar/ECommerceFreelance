@@ -57,6 +57,13 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 #endregion
 
 
+#region Endpoints API Explorer Configuration
+
+builder.Services.AddEndpointsApiExplorer();
+
+#endregion
+
+
 #region API Configuration
 // Add services to the container.
 builder.Services.AddControllers();
@@ -248,6 +255,12 @@ if (app.Environment.IsDevelopment())
 
 #region Use middleware
 
+#region Static Files Meddleware
+
+app.UseStaticFiles();
+
+#endregion
+
 #region Swagger Meddleware
 app.UseSwagger();
 app.UseSwaggerUI(options =>
@@ -278,7 +291,6 @@ app.MapControllers();
 app.Run();
 
 #endregion
-
 
 #endregion
 

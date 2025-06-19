@@ -9,6 +9,5 @@ namespace ECommerce.BL.Settings
     public class OrderSettings
     {
         public string Email { get; set; }
-        public string OrderLink { get; set; }
     }
 }

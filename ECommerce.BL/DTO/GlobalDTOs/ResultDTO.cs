@@ -1,4 +1,5 @@
-﻿using System;
+﻿using CloudinaryDotNet.Actions;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -10,5 +11,6 @@ namespace ECommerce.BL.DTO.GlobalDTOs
     {
         public bool IsSuccess { get; set; }
         public string Message { get; set; } = string.Empty;
+        public ResourceType? Data { get; set; }
     }
 }

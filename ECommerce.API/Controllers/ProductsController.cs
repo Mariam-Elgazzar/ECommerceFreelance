@@ -66,7 +66,7 @@ namespace ECommerce.API.Controllers
                 }
 
                 _logger.LogInformation("Successfully created product: Name={Name}", dto.Name);
-                return Created("", result.Message);
+                return Ok(result);
             }
             catch (Exception ex)
             {
@@ -91,7 +91,7 @@ namespace ECommerce.API.Controllers
         [HttpPut]
         [Route("~/Products/Update")]
         //[Authorize(Roles = Roles.Admin)]
-        public async Task<ActionResult<ResultDTO>> UpdateProduct([FromQuery]UpdateProductDTO dto)
+        public async Task<ActionResult<ResultDTO>> UpdateProduct([FromQuery] UpdateProductDTO dto)
         {
             try
             {

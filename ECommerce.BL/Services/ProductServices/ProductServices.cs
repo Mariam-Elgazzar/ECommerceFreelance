@@ -7,6 +7,7 @@ using ECommerce.BL.Settings;
 using ECommerce.BL.Specification.ProductSpecification;
 using ECommerce.BL.UnitOfWork;
 using ECommerce.DAL.Models;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -54,55 +55,35 @@ namespace ECommerce.BL.Services.ProductServices
         /// <returns>A result indicating the IsSuccess or failure of the operation.</returns>
         public async Task<ResultDTO> CreateProductAsync(CreateProductDTO dto)
         {
-            if (dto == null || string.IsNullOrWhiteSpace(dto.Name) || dto.Price < 0)
+            if (dto == null || string.IsNullOrWhiteSpace(dto.Name))
                 return new ResultDTO { IsSuccess = false, Message = "Invalid product data provided." };
 
-            var category = await _unitOfWork.Repository<Category>().GetByIdAsync(dto.CategoryId);
-            if (category == null)
-                return new ResultDTO { IsSuccess = false, Message = $"Category with ID {dto.CategoryId} not found." };
+            var (categoryExists, category, categoryResult) = await CheckCategoryExistsAsync(dto.CategoryId);
+            if (!categoryExists)
+                return categoryResult;
 
             string? mainImageUrl = null;
             string? mainImagePublicId = null;
 
-            var type = ResourceType.Image;
             if (dto.MainImage != null)
             {
-                var extension = Path.GetExtension(dto.MainImage.FileName).ToLowerInvariant();
-                if (_allowedImageExtensions.Contains(extension))
-                {
-                    if (dto.MainImage.Length > _maxAllowedImageSize)
-                        return new ResultDTO { IsSuccess = false, Message = "File size exceeds the maximum allowed size of 3MB for images." };
-                }
-                else if (_allowedVideoExtensions.Contains(extension))
-                {
-                    if (dto.MainImage.Length > _maxAllowedVideoSize)
-                        return new ResultDTO { IsSuccess = false, Message = "File size exceeds the maximum allowed size of 10MB for videos." };
-                    type = ResourceType.Video;
-                }
-                else
-                    return new ResultDTO { IsSuccess = false, Message = "Invalid file type. Allowed types are: png, jpg, jpeg, webp, svg for images and mp4, webm, mov, mkv for videos." };
-                
+                // Validate MainImage using ValidateFile
+                var validationResult = ValidateFile(dto.MainImage, ResourceType.Image);
+                if (!validationResult.IsSuccess)
+                    return validationResult;
 
-                var uploadResult = await FileUploader.UploadMediaAsync(dto.MainImage, _cloudinary,type);
+                var uploadResult = await UploadFileAsync(dto.MainImage, ResourceType.Image);
                 if (!uploadResult.IsSuccess)
-                    return new ResultDTO { IsSuccess = false, Message = uploadResult.ErrorMessage };
-                
+                    return new ResultDTO { IsSuccess = false, Message = uploadResult?.ErrorMessage };
+
                 mainImageUrl = uploadResult.MediaUrl;
                 mainImagePublicId = uploadResult.PublicId;
             }
 
-            string? additionalAttributesJson = null;
-            if (dto.AdditionalAttributes != null && dto.AdditionalAttributes.Any())
-            {
-                try
-                {
-                    additionalAttributesJson = JsonSerializer.Serialize(dto.AdditionalAttributes,_jsonOptions);
-                }
-                catch
-                {
-                    return new ResultDTO { IsSuccess = false, Message = "Invalid additional attributes format." };
-                }
-            }
+            var serializeResult = SerializeAdditionalAttributes(dto.AdditionalAttributes, out var additionalAttributesJson);
+            if (!serializeResult.IsSuccess)
+                return serializeResult;
+
             using var transaction = await _unitOfWork.BeginTransactionAsync();
             var product = new Product
             {
@@ -114,6 +95,9 @@ namespace ECommerce.BL.Services.ProductServices
                 ImagePublicId = mainImagePublicId,
                 CategoryId = dto.CategoryId,
                 CreatedAt = DateTime.UtcNow,
+                Brand = dto.Brand,
+                Modal = dto.Model,
+                Quantity = dto.Quantity
             };
 
             await _unitOfWork.Repository<Product>().AddAsync(product);
@@ -123,43 +107,17 @@ namespace ECommerce.BL.Services.ProductServices
             {
                 foreach (var media in dto.AdditionalMedia)
                 {
-                    if (media == null || media.Length == 0)
-                        continue;
-                    var extension = Path.GetExtension(media.FileName).ToLowerInvariant();
-                    if (_allowedImageExtensions.Contains(extension))
-                    {
-                        type = ResourceType.Image;
-                        if (media.Length > _maxAllowedImageSize)
-                            return new ResultDTO { IsSuccess = false, Message = "File size exceeds the maximum allowed size of 3MB for images." };
-                    }
-                    else if (_allowedVideoExtensions.Contains(extension))
-                    {
-                        type = ResourceType.Video;
-                        if (media.Length > _maxAllowedVideoSize)
-                                return new ResultDTO { IsSuccess = false, Message = "File size exceeds the maximum allowed size of 10MB for videos." };
-                    }
-                    else if (extension != ".pdf")
-                    {
-                        type = ResourceType.Raw;
-                        if (media.Length > 1024*1024 )
-                            return new ResultDTO { IsSuccess = false, Message = "File size exceeds the maximum allowed size of 10MB for videos." };
-                    }
-                    else
-                        return new ResultDTO { IsSuccess = false, Message = "Invalid file type. Allowed types are: png, jpg, jpeg, webp, svg for images and mp4, webm, mov, mkv for videos." };
+                    var validationResult = ValidateFile(media);
+                    if (!validationResult.IsSuccess)
+                        return validationResult;
 
-                    var uploadResult = await FileUploader.UploadMediaAsync(media, _cloudinary,type);
+                    var uploadResult = await UploadFileAsync(media, (ResourceType)validationResult.Data);
                     if (!uploadResult.IsSuccess)
                         continue;
 
-                    var ProductMedia = new ProductMedia
-                    {
-                        MediaURL = uploadResult.MediaUrl,
-                        ImageThumbnailURL = uploadResult.ThumbnailUrl,
-                        MediaPublicId = uploadResult.PublicId,
-                        ProductId = product.Id
-                    };
-
-                    await _unitOfWork.Repository<ProductMedia>().AddAsync(ProductMedia);
+                    var productMedia = CreateProductMedia(uploadResult, product.Id);
+                    await _unitOfWork.Repository<ProductMedia>().AddAsync(productMedia);
+                
                 }
             }
 
@@ -172,6 +130,7 @@ namespace ECommerce.BL.Services.ProductServices
             await transaction.CommitAsync();
             return new ResultDTO { IsSuccess = true, Message = "Product created IsSuccessfully." };
         }
+
         #endregion
 
 
@@ -185,76 +144,47 @@ namespace ECommerce.BL.Services.ProductServices
         public async Task<ResultDTO> UpdateProductAsync(UpdateProductDTO dto)
         {
             if (dto == null)
-            {
                 return new ResultDTO { IsSuccess = false, Message = "Invalid product data provided." };
-            }
 
-            var product = await _unitOfWork.Repository<Product>().GetBySpecAsync(new ProductSpecification(dto.Id));
-            if (product == null)
-            {
-                return new ResultDTO { IsSuccess = false, Message = $"Product with ID {dto.Id} not found." };
-            }
+            var (productExists, product, productResult) = await CheckProductExistsAsync(dto.Id);
+            if (!productExists)
+                return productResult;
 
             if (dto.CategoryId.HasValue)
             {
-                var category = await _unitOfWork.Repository<Category>().GetByIdAsync(dto.CategoryId.Value);
-                if (category == null)
-                {
-                    return new ResultDTO { IsSuccess = false, Message = $"Category with ID {dto.CategoryId} not found." };
-                }
+                var (categoryExists, _, categoryResult) = await CheckCategoryExistsAsync(dto.CategoryId.Value);
+                if (!categoryExists)
+                    return categoryResult;
+                product.CategoryId = dto.CategoryId.Value;
             }
 
             product.Name = dto.Name ?? product.Name;
             product.Description = dto.Description ?? product.Description;
+            product.Brand = dto.Brand ?? product.Brand;
+            product.Status = dto.Status ?? product.Status;
+            product.Modal = dto.Model ?? product.Modal;
+            product.Quantity = dto.Quantity ?? product.Quantity;
 
             if (dto.AdditionalAttributesJson != null)
             {
-                try
-                {
-                    product.AdditionalAttributes = JsonSerializer.Serialize(dto.AdditionalAttributesJson, _jsonOptions);
-                }
-                catch
-                {
-                    return new ResultDTO { IsSuccess = false, Message = "Invalid additional attributes format." };
-                }
-            }
-
-            if (!string.IsNullOrWhiteSpace(dto.Status))
-            {
-                product.Status = dto.Status;
-            }
-
-            if (dto.CategoryId.HasValue)
-            {
-                product.CategoryId = dto.CategoryId.Value;
+                var serializeResult = SerializeAdditionalAttributes(dto.AdditionalAttributesJson, out var additionalAttributesJson);
+                if (!serializeResult.IsSuccess)
+                    return serializeResult;
+                product.AdditionalAttributes = additionalAttributesJson;
             }
 
             string? oldImagePublicId = null;
-            var type = ResourceType.Image;
             if (dto.MainImage != null)
             {
-                var extension = Path.GetExtension(dto.MainImage.FileName).ToLowerInvariant();
-                if (_allowedImageExtensions.Contains(extension))
-                {
-                    if (dto.MainImage.Length > _maxAllowedImageSize)
-                        return new ResultDTO { IsSuccess = false, Message = "File size exceeds the maximum allowed size of 3MB for images." };
-                }
-                else if (_allowedVideoExtensions.Contains(extension))
-                {
-                    type = ResourceType.Video;
-                    if (dto.MainImage.Length > _maxAllowedVideoSize)
-                        return new ResultDTO { IsSuccess = false, Message = "File size exceeds the maximum allowed size of 10MB for videos." };
-                }
-                else
-                    return new ResultDTO { IsSuccess = false, Message = "Invalid file type. Allowed types are: png, jpg, jpeg, webp, svg for images and mp4, webm, mov, mkv for videos." };
+                // Validate MainImage
+                var validationResult = ValidateFile(dto.MainImage, ResourceType.Image);
+                if (!validationResult.IsSuccess)
+                    return validationResult;
 
-                oldImagePublicId = product?.ImagePublicId;
-                
-                var uploadResult = await FileUploader.UploadMediaAsync(dto.MainImage, _cloudinary, type);
+                oldImagePublicId = product.ImagePublicId;
+                var uploadResult = await UploadFileAsync(dto.MainImage, ResourceType.Image);
                 if (!uploadResult.IsSuccess)
-                {
                     return new ResultDTO { IsSuccess = false, Message = uploadResult.ErrorMessage };
-                }
 
                 product.MainImageURL = uploadResult.MediaUrl;
                 product.ImagePublicId = uploadResult.PublicId;
@@ -263,10 +193,9 @@ namespace ECommerce.BL.Services.ProductServices
             if (dto.MediaToDelete != null && dto.MediaToDelete.Any())
             {
                 var mediaToDelete = product.ProductMedia
-                    .Where(m => dto.MediaToDelete.Contains(m?.MediaPublicId))
+                    .Where(m => m != null && dto.MediaToDelete.Equals(m?.MediaPublicId))
                     .ToList();
-
-                await FileUploader.RemoveMediaAsync(_cloudinary, dto.MediaToDelete.ToArray());
+                await DeleteMediaAsync(mediaToDelete);
                 await _unitOfWork.Repository<ProductMedia>().DeleteRangeAsync(mediaToDelete);
             }
 
@@ -274,42 +203,21 @@ namespace ECommerce.BL.Services.ProductServices
             {
                 foreach (var media in dto.AdditionalMedia)
                 {
-                    var extension = Path.GetExtension(media.FileName).ToLowerInvariant();
-                    if (_allowedImageExtensions.Contains(extension))
-                    {
-                        type = ResourceType.Image;
-                        if (media.Length > _maxAllowedImageSize)
-                            return new ResultDTO { IsSuccess = false, Message = "File size exceeds the maximum allowed size of 3MB for images." };
-                    }
-                    else if (_allowedVideoExtensions.Contains(extension))
-                    {
-                        type = ResourceType.Video;
-                        if (media.Length > _maxAllowedVideoSize)
-                            return new ResultDTO { IsSuccess = false, Message = "File size exceeds the maximum allowed size of 10MB for videos." };
-                    }
-                    else if (extension != ".pdf")
-                    {
-                        type = ResourceType.Raw;
-                        if (media.Length > 1024 * 1024)
-                            return new ResultDTO { IsSuccess = false, Message = "File size exceeds the maximum allowed size of 10MB for videos." };
-                    }
-                    else
-                        return new ResultDTO { IsSuccess = false, Message = "Invalid file type. Allowed types are: png, jpg, jpeg, webp, svg for images and mp4, webm, mov, mkv for videos." };
+                    if (media == null || media.Length == 0)
+                        continue;
 
+                    // Validate AdditionalMedia
+                    var mediaValidationResult = ValidateFile(media);
+                    if (!mediaValidationResult.IsSuccess)
+                        return mediaValidationResult;
 
-                    var uploadResult = await FileUploader.UploadMediaAsync(media, _cloudinary, type);
+                    var uploadResult = await UploadFileAsync(media, (ResourceType)mediaValidationResult?.Data);
                     if (!uploadResult.IsSuccess)
                         continue;
 
-                    var ProductMedia = new ProductMedia
-                    {
-                        MediaURL = uploadResult.MediaUrl,
-                        ImageThumbnailURL = uploadResult.ThumbnailUrl,
-                        MediaPublicId = uploadResult.PublicId,
-                        ProductId = product.Id
-                    };
-
-                    await _unitOfWork.Repository<ProductMedia>().AddAsync(ProductMedia);
+                    // Create ProductMedia
+                    var productMedia = CreateProductMedia(uploadResult, product.Id);
+                    await _unitOfWork.Repository<ProductMedia>().AddAsync(productMedia);
                 }
             }
 
@@ -317,8 +225,8 @@ namespace ECommerce.BL.Services.ProductServices
             await _unitOfWork.Complete();
 
             if (!string.IsNullOrEmpty(oldImagePublicId))
-                await FileUploader.RemoveMediaAsync(_cloudinary, oldImagePublicId);
-
+                await DeleteMediaAsync(new[] { new ProductMedia { MediaPublicId = oldImagePublicId } });
+            
             return new ResultDTO { IsSuccess = true, Message = "Product updated IsSuccessfully." };
         }
 
@@ -333,19 +241,18 @@ namespace ECommerce.BL.Services.ProductServices
         /// <returns>A result indicating the IsSuccess or failure of the operation.</returns>
         public async Task<ResultDTO> DeleteProductAsync(int id)
         {
-            var product = await _unitOfWork.Repository<Product>().GetBySpecAsync(new ProductSpecification(id));
-            if (product == null)
-            {
-                return new ResultDTO { IsSuccess = false, Message = $"Product with ID {id} not found." };
-            }
+            var (productExists, product, productResult) = await CheckProductExistsAsync(id);
+            if (!productExists)
+                return productResult;
+
             if (product.ProductMedia != null && product.ProductMedia.Any())
             {
-                var mediaPublicIds = product.ProductMedia.Select(m => m.MediaPublicId).ToArray();
-                await FileUploader.RemoveMediaAsync(_cloudinary, mediaPublicIds);
+                await DeleteMediaAsync(product.ProductMedia);
             }
-            if (!string.IsNullOrEmpty(product.ImagePublicId))
-                await FileUploader.RemoveMediaAsync(_cloudinary, product.ImagePublicId);
 
+            if (!string.IsNullOrEmpty(product.ImagePublicId))
+                await DeleteMediaAsync(new[] { new ProductMedia { MediaPublicId = product.ImagePublicId } });
+            
             await _unitOfWork.Repository<Product>().DeleteAsync(product.Id);
             await _unitOfWork.Complete();
             return new ResultDTO { IsSuccess = true, Message = "Product deleted IsSuccessfully." };
@@ -363,13 +270,40 @@ namespace ECommerce.BL.Services.ProductServices
         /// <exception cref="KeyNotFoundException">Thrown when the product is not found.</exception>
         public async Task<ProductDTO> GetProductByIdAsync(int id)
         {
-            var product = await _unitOfWork.Repository<Product>().GetBySpecAsync(new ProductSpecification(id));
-            if (product == null)
-            {
+            var (productExists, product, _) = await CheckProductExistsAsync(id);
+            if (!productExists)
                 throw new KeyNotFoundException($"Product with ID {id} not found.");
-            }
 
-            return MapToProductDTO(product);
+            return new ProductDTO
+            {
+                Id = product.Id,
+                Name = product.Name,
+                Description = product.Description,
+                AdditionalAttributes = product.AdditionalAttributes,
+                Status = product.Status,
+                Quantity = product.Quantity,
+                MainImageURL = product.MainImageURL,
+                ImagePublicId = product.ImagePublicId,
+                CategoryId = product.CategoryId,
+                CategoryName = product.Category?.Name,
+                CreatedAt = product.CreatedAt,
+                Brand = product.Brand,
+                Model = product.Modal,
+                ProductMedia = product.ProductMedia.Select(m => new ProductMediaDTO
+                {
+                    MediaURL = m.MediaURL,
+                    ImageThumbnailURL = m.ImageThumbnailURL,
+                    MediaPublicId = m.MediaPublicId,
+                    MediaType = _allowedVideoExtensions
+                    .Contains(Path.GetExtension(m.MediaURL)
+                    .ToLowerInvariant()) ? "video" :
+                    _allowedImageExtensions.
+                    Contains(Path.GetExtension(m.MediaURL).
+                    ToLowerInvariant()) ? "image" :
+                    Path.GetExtension(m.MediaURL).ToLowerInvariant() == ".pdf" ?
+                    "pdf" : "unknown"
+                }).ToList()
+            };
         }
 
         #endregion
@@ -389,7 +323,23 @@ namespace ECommerce.BL.Services.ProductServices
             var products = await _unitOfWork.Repository<Product>().GetAllBySpecAsync(spec);
             var totalCount = await _unitOfWork.Repository<Product>().CountAsync(spec);
 
-            var productDTOs = products.Select(MapToProductDTO).ToList();
+            var productDTOs = products.Select(product => new ProductDTO
+            {
+                Id = product.Id,
+                Name = product.Name,
+                Description = product.Description,
+                AdditionalAttributes = product.AdditionalAttributes,
+                Status = product.Status,
+                Quantity = product.Quantity,
+                MainImageURL = product.MainImageURL,
+                ImagePublicId = product.ImagePublicId,
+                CategoryId = product.CategoryId,
+                CategoryName = product.Category?.Name,
+                CreatedAt = product.CreatedAt,
+                Brand = product.Brand,
+                Model = product.Modal
+            }).ToList();
+
 
             return new PaginationResponse<ProductDTO>
             {
@@ -402,31 +352,215 @@ namespace ECommerce.BL.Services.ProductServices
         #endregion
 
 
+        #region Helper Methods
+
         #region Map Product to ProductDTO
-        private ProductDTO MapToProductDTO(Product product)
+        //private ProductDTO MapToProductDTO(Product product)
+        //{
+        //    return new ProductDTO
+        //    {
+        //        Id = product.Id,
+        //        Name = product.Name,
+        //        Description = product.Description,
+        //        AdditionalAttributes = product.AdditionalAttributes,
+        //        Status = product.Status,
+        //        Quantity = product.Quantity,
+        //        MainImageURL = product.MainImageURL,
+        //        ImagePublicId = product.ImagePublicId,
+        //        CategoryId = product.CategoryId,
+        //        CategoryName = product.Category?.Name,
+        //        CreatedAt = product.CreatedAt,
+        //        Brand = product.Brand,
+        //        Model = product.Modal,
+        //        ProductMedia = product.ProductMedia.Select(m => new ProductMediaDTO
+        //        {
+        //            MediaURL = m.MediaURL,
+        //            ImageThumbnailURL = m.ImageThumbnailURL,
+        //            MediaPublicId = m.MediaPublicId,
+        //            MediaType = _allowedVideoExtensions
+        //            .Contains(Path.GetExtension(m.MediaURL)
+        //            .ToLowerInvariant()) ? "video" :
+        //            _allowedImageExtensions.
+        //            Contains(Path.GetExtension(m.MediaURL).
+        //            ToLowerInvariant()) ? "image" :
+        //            Path.GetExtension(m.MediaURL).ToLowerInvariant() == ".pdf" ?
+        //            "pdf" : "unknown"
+        //        }).ToList()
+        //    };
+        //}
+
+        #endregion
+
+
+        #region ValidateFile
+        /// <summary>
+        /// Validates the file type and size, returning the resource type and validation result.
+        /// </summary>
+        /// <param name="file">The file to validate.</param>
+        /// <param name="defaultType">The default resource type if the file is valid.</param>
+        /// <returns>A result indicating whether the file is valid and its resource type.</returns>
+        private ResultDTO ValidateFile(IFormFile file, ResourceType defaultType = ResourceType.Image)
         {
-            return new ProductDTO
+            if (file == null || file.Length == 0)
+                return new ResultDTO { IsSuccess = false, Message = "No file provided." };
+
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            ResourceType type = defaultType;
+
+            if (_allowedImageExtensions.Contains(extension))
             {
-                Id = product.Id,
-                Name = product.Name,
-                Description = product.Description,
-                AdditionalAttributes = product.AdditionalAttributes,
-                Status = product.Status,
-                MainImageURL = product.MainImageURL,
-                ImagePublicId = product.ImagePublicId,
-                CategoryId = product.CategoryId,
-                CategoryName = product.Category?.Name,
-                CreatedAt = product.CreatedAt,
-                ProductMedia = product.ProductMedia.Select(m => new ProductMediaDTO
-                {
-                    MediaURL = m.MediaURL,
-                    ImageThumbnailURL = m.ImageThumbnailURL,
-                    MediaPublicId = m.MediaPublicId
-                }).ToList()
+                if (file.Length > _maxAllowedImageSize)
+                    return new ResultDTO { IsSuccess = false, Message = "File size exceeds the maximum allowed size of 3MB for images." };
+                type = ResourceType.Image;
+            }
+            else if (_allowedVideoExtensions.Contains(extension))
+            {
+                if (file.Length > _maxAllowedVideoSize)
+                    return new ResultDTO { IsSuccess = false, Message = "File size exceeds the maximum allowed size of 10MB for videos." };
+                type = ResourceType.Video;
+            }
+            else if (extension == ".pdf")
+            {
+                if (file.Length > 1024 * 1024)
+                    return new ResultDTO { IsSuccess = false, Message = "File size exceeds the maximum allowed size of 1MB for PDFs." };
+            }
+            else
+                return new ResultDTO { IsSuccess = false, Message = "Invalid file type. Allowed types are: png, jpg, jpeg, webp, svg for images; mp4, webm, mov, mkv for videos; pdf for documents." };
+
+            return new ResultDTO { IsSuccess = true, Message = "File is valid.", Data = type };
+        }
+
+        #endregion
+
+
+        #region UploadFileAsync
+        /// <summary>
+        /// Uploads a file to Cloudinary or server based on its type.
+        /// </summary>
+        /// <param name="file">The file to upload.</param>
+        /// <param name="cloudinary">The Cloudinary instance for uploading media.</param>
+        /// <param name="type">The resource type for the file.</param>
+        private async Task<UploadFileDTO> UploadFileAsync(IFormFile file, ResourceType type)
+        {
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (extension == ".pdf")
+                return await FileUploader.UploadMediaToServerAsync(file);
+            return await FileUploader.UploadMediaAsync(file, _cloudinary, type);
+        }
+
+        #endregion
+
+
+        #region CreateProductMedia
+        /// <summary>
+        /// Creates a ProductMedia entity from upload result.
+        /// </summary>
+        /// <param name="uploadResult">The result of the file upload.</param>
+        /// <param name="productId">The ID of the product associated with the media.</param>
+        private ProductMedia CreateProductMedia(UploadFileDTO uploadResult, int productId)
+        {
+            return new ProductMedia
+            {
+                MediaURL = uploadResult.MediaUrl,
+                ImageThumbnailURL = uploadResult.ThumbnailUrl,
+                MediaPublicId = uploadResult.PublicId,
+                ProductId = productId
             };
         }
 
         #endregion
 
+
+        #region RemoveMediaAsync
+
+        /// <summary>
+        /// Deletes media files from Cloudinary and server (for PDFs).
+        /// </summary>
+        /// <param name="mediaItems">The collection of ProductMedia items to delete.</param>
+        public async Task DeleteMediaAsync(IEnumerable<ProductMedia> mediaItems)
+        {
+            if (mediaItems == null || !mediaItems.Any())
+                return;
+
+            var pdfMedia = mediaItems.Where(m => !string.IsNullOrEmpty(m.MediaURL) && m.MediaURL.Contains(".pdf")).ToList();
+            if (pdfMedia.Any())
+            {
+                foreach (var media in pdfMedia)
+                {
+                    FileUploader.RemoveMediaFromServer(media.MediaURL);
+                }
+            }
+
+            var mediaPublicIds = mediaItems.Select(m => m.MediaPublicId).Where(id => !string.IsNullOrEmpty(id)).ToArray();
+            if (mediaPublicIds.Any())
+            {
+                await FileUploader.RemoveMediaAsync(_cloudinary, mediaPublicIds);
+            }
+        }
+
+        #endregion
+
+
+        #region SerializeAdditionalAttributes
+        /// <summary>
+        /// Serializes additional attributes to JSON string.
+        /// </summary>
+        /// <param name="additionalAttributes">The additional attributes to serialize.</param>
+        /// <param name="additionalAttributesJson">The serialized JSON string of additional attributes.</param>
+        /// <returns>A result indicating whether the serialization was successful.</returns>
+        public ResultDTO SerializeAdditionalAttributes(object additionalAttributes, out string? additionalAttributesJson)
+        {
+            additionalAttributesJson = null;
+            if (additionalAttributes != null)
+            {
+                try
+                {
+                    additionalAttributesJson = JsonSerializer.Serialize(additionalAttributes, _jsonOptions);
+                    return new ResultDTO { IsSuccess = true };
+                }
+                catch
+                {
+                    return new ResultDTO { IsSuccess = false, Message = "Invalid additional attributes format." };
+                }
+            }
+            return new ResultDTO { IsSuccess = true };
+        }
+
+        #endregion
+
+
+        #region CheckProductExistsAsync
+        /// <summary>
+        /// Checks if a product exists by ID.
+        /// </summary>
+        /// <param name="id">The ID of the product to check.</param>
+        /// <returns>A tuple indicating whether the product exists, the product itself, and a result DTO.</returns>
+        public async Task<(bool Exists, Product Product, ResultDTO Result)> CheckProductExistsAsync(int id)
+        {
+            var product = await _unitOfWork.Repository<Product>().GetBySpecAsync(new ProductSpecification(id));
+            if (product == null)
+                return (false, null, new ResultDTO { IsSuccess = false, Message = $"Product with ID {id} not found." });
+            return (true, product, new ResultDTO { IsSuccess = true });
+        }
+        #endregion
+
+
+        #region CheckCategoryExistsAsync
+        /// <summary>
+        /// Checks if a category exists by ID.
+        /// </summary>
+        /// <param name="categoryId">The ID of the category to check.</param>
+        public async Task<(bool Exists, Category Category, ResultDTO Result)> CheckCategoryExistsAsync(int categoryId)
+        {
+            var category = await _unitOfWork.Repository<Category>().GetByIdAsync(categoryId);
+            if (category == null)
+                return (false, null, new ResultDTO { IsSuccess = false, Message = $"Category with ID {categoryId} not found." });
+            return (true, category, new ResultDTO { IsSuccess = true });
+        }
+        #endregion
+
+        #endregion
+
     }
 }
+
