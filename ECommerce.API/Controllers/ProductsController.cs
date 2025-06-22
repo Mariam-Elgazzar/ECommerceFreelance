@@ -57,6 +57,22 @@ namespace ECommerce.API.Controllers
                         Message = "Product name is required."
                     });
                 }
+                if (dto.AdditionalAttributes is string additionalAttributesJson)
+                {
+                    try
+                    {
+                        dto.AdditionalAttributesJson = JsonSerializer.Deserialize<Dictionary<string, string>>(additionalAttributesJson);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to deserialize AdditionalAttributes JSON for UpdateProduct: {Json}", additionalAttributesJson);
+                        return BadRequest(new ResultDTO
+                        {
+                            IsSuccess = false,
+                            Message = "Invalid format for AdditionalAttributes."
+                        });
+                    }
+                }
 
                 var result = await _unitOfWork.ProductServices.CreateProductAsync(dto);
                 if (!result.IsSuccess)
@@ -217,7 +233,7 @@ namespace ECommerce.API.Controllers
         /// <response code="200">If the products are retrieved successfully.</response>
         [HttpGet]
         [Route("~/Products/GetAllProducts")]
-        ////[Authorize(Roles = $"{Roles.Admin}, {Roles.User}")]
+        //[Authorize(Roles = $"{Roles.Admin}, {Roles.User}")]
         public async Task<ActionResult<PaginationResponse<ProductDTO>>> GetAllProducts([FromQuery] ProductParams param = null)
         {
             try

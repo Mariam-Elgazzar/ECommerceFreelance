@@ -12,27 +12,29 @@ namespace ECommerce.BL.Specification.ProductSpecification
         /// </summary>
         /// <param name="param">The parameters for filtering, sorting, and pagination.</param>
         public ProductSpecification(ProductParams param)
-            : base(x => param == null ||
-            (string.IsNullOrEmpty(param.Search) &&
-            string.IsNullOrEmpty(param.Brand) &&
-            string.IsNullOrEmpty(param.Model) &&
-            string.IsNullOrEmpty(param.Status) &&
-            !param.CategoryId.HasValue &&
-            !param.Quantity.HasValue) ||
-            ((param.Search != null && (
-            (!string.IsNullOrEmpty(param.Search) && 
-            x.Name.ToLower().Contains(param.Search.ToLower())) ||
-            (x.Description != null && 
-            x.Description.ToLower().Contains(param.Search.ToLower())))) ||
-            (param.Brand != null && x.Brand != null && 
-            x.Brand.ToLower().Contains(param.Brand.ToLower())) ||
-            (param.Model != null && x.Modal != null && 
-            x.Modal.ToLower().Contains(param.Model.ToLower())) ||
-            (param.Status != null && x.Status != null && 
-            x.Status.ToLower().Contains(param.Status.ToLower())) ||
-            (param.CategoryId.HasValue && x.CategoryId == param.CategoryId.Value) ||
-            (param.Quantity.HasValue && x.Quantity == param.Quantity.Value))
-            )
+            : base(x =>
+    param == null ||
+    (string.IsNullOrEmpty(param.Search) &&
+     string.IsNullOrEmpty(param.Brand) &&
+     string.IsNullOrEmpty(param.Model) &&
+     string.IsNullOrEmpty(param.Status) &&
+     !param.CategoryId.HasValue &&
+     !param.Quantity.HasValue) ||
+    (
+        (string.IsNullOrEmpty(param.Search) ||
+         (
+             x.Name.ToLower().Contains(param.Search.ToLower()) ||
+             (x.Description != null && x.Description.ToLower().Contains(param.Search.ToLower()))
+         )) &&
+        (string.IsNullOrEmpty(param.Brand) ||
+         (x.Brand != null && x.Brand.ToLower().Contains(param.Brand.ToLower()))) &&
+        (string.IsNullOrEmpty(param.Model) ||
+         (x.Modal != null && x.Modal.ToLower().Contains(param.Model.ToLower()))) &&
+        (string.IsNullOrEmpty(param.Status) ||
+         (x.Status != null && x.Status.ToLower().Contains(param.Status.ToLower()))) &&
+        (!param.CategoryId.HasValue || x.CategoryId == param.CategoryId.Value) &&
+        (!param.Quantity.HasValue || x.Quantity == param.Quantity.Value)
+    ))
         {
             // Include related data
             AddInclude(p => p.Category);

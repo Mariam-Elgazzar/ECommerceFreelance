@@ -1,6 +1,7 @@
 ﻿using ECommerce.BL.Repository;
 using ECommerce.BL.Services;
 using ECommerce.BL.Services.AuthenticationService;
+using ECommerce.BL.Services.Brand;
 using ECommerce.BL.Services.CategoryServices;
 using ECommerce.BL.Services.EmailServices;
 using ECommerce.BL.Services.ProductServices;
@@ -11,6 +12,7 @@ namespace ECommerce.BL.UnitOfWork
 {
     public interface IUnitOfWork
     {
+        IBrandServices brandServices { get; }
         IOrderService OrderServices { get; }
         IProductServices ProductServices { get; }
         ICategoryServices CategoryServices { get; }

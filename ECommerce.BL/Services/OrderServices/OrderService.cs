@@ -4,9 +4,7 @@ using ECommerce.BL.DTO.OrderDTOs;
 using ECommerce.BL.Settings;
 using ECommerce.BL.Specification.ProductSpecification;
 using ECommerce.BL.UnitOfWork;
-using ECommerce.DAL.Extend;
 using ECommerce.DAL.Models;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Twilio;
@@ -43,15 +41,23 @@ namespace ECommerce.BL.Services
         /// <exception cref="Exception">Thrown when an error occurs during the WhatsApp notification process.</exception>
         public async Task<ResultDTO> ConfirmCheckout(OrderDTO dto)
         {
-            var UserData = await _unitOfWork.Repository<ApplicationUser>()
-                .FindAsync(u => u.Id == dto.UserId);
-            if (UserData == null)
+            if(dto == null || dto.Name == null || dto.Email == null|| dto.PhoneNumber == null )
             {
-                _logger.LogWarning("User not found: {UserId}", dto.UserId);
+                _logger.LogWarning("Checkout DTO is null.");
                 return new ResultDTO
                 {
                     IsSuccess = false,
-                    Message = "User not found."
+                    Message = "Invalid checkout data."
+                };
+            }
+
+            if (dto.ProductId <= 0)
+            {
+                _logger.LogWarning("Invalid ProductId: {ProductId}", dto.ProductId);
+                return new ResultDTO
+                {
+                    IsSuccess = false,
+                    Message = "Invalid product."
                 };
             }
             var product = await _unitOfWork.Repository<Product>().GetBySpecAsync(new ProductSpecification(dto.ProductId));
@@ -67,44 +73,70 @@ namespace ECommerce.BL.Services
 
             var checkout = new CheckoutDTO
             {
-                Name = $"{UserData.FirstName} {UserData.LastName}",
-                Address = UserData.Address,
-                PhoneNumber = UserData.PhoneNumber,
-                Email = UserData.Email,
+                Name = $"{dto.Name}",
+                Address = dto?.Address,
+                PhoneNumber = dto.PhoneNumber,
+                Email = dto.Email,
+                RentalPeriod = dto.RentalPeriod,
                 ProductName = product.Name,
                 Brand = product.Brand,
                 Modal = product.Modal,
                 ProductCategory = product.Category.Name,
-                ProductDescription = product.Description,
                 Status = product.Status,
             };
-            // TODO: WhatsApp notification
+
             try
             {
 
                 TwilioClient.Init(_twilioSettings.AccountSid, _twilioSettings.AuthToken);
 
-                string messageBody = $@"📦 *إشعار طلب جديد - متجر العوفي* 📦
+                #region Old Massage
+                
+//                string messageBody = $@"📦 *إشعار طلب جديد - متجر العوفي* 📦
 
-*عزيزي مدير المتجر،*
+//*عزيزي مدير المتجر،*
 
-تم تسجيل طلب شراء جديد في *متجر العوفي*. يرجى مراجعة التفاصيل أدناه:
+//تم تسجيل طلب شراء جديد في *متجر العوفي*. يرجى مراجعة التفاصيل أدناه:
 
-*تفاصيل العميل:*
-الاسم: {checkout.Name}
-البريد الإلكتروني: {checkout.Email}
-رقم الهاتف: {checkout.PhoneNumber}
+//*تفاصيل العميل:*
+//الاسم: {checkout.Name}
+//البريد الإلكتروني: {checkout.Email}
+//رقم الهاتف: {checkout.PhoneNumber}
+//العنوان: {checkout.Address}
+
+//*المنتجات المطلوبة:*
+//{$"المنتج: {checkout.ProductName}"}
+//{$"الوصف: {checkout.ProductDescription}"}
+//{$"الفئة: {checkout.ProductCategory}"}
+//{$"العلامه التجاريه: {checkout.Brand}"}
+//{$"الموديل: {checkout.Modal}"}
+
+//لأي استفسارات، تواصلوا مع الدعم: {_orderSettings.Email}  
+//🎗️ *فريق متجر العوفي*";
+
+                #endregion
+
+                string messageBody = $@"📦 إشعار طلب جديد - متجر العوفي 📦
+
+عزيزي مدير المتجر،
+
+تم تسجيل طلب جديد في متجر العوفي. يرجى مراجعة التفاصيل أدناه:
+
+تفاصيل العميل
+:الاسم: {checkout.Name} ,
+البريد الإلكتروني: {checkout.Email} ,
+رقم الهاتف: {checkout.PhoneNumber} ,
 العنوان: {checkout.Address}
 
-*المنتجات المطلوبة:*
-{$"المنتج: {checkout.ProductName}"}
-{$"الوصف: {checkout.ProductDescription}"}
-{$"الفئة: {checkout.ProductCategory}"}
-{$"العلامه التجاريه: {checkout.Brand}"}
-{$"الموديل: {checkout.Modal}"}
+تفاصيل الطلب:
+نوع الطلب: {(checkout.RentalPeriod != null ? $"إيجار (مدة الإيجار: {checkout.RentalPeriod})" : "شراء")} ,
+المنتج: {checkout.ProductName} ,
+الفئة: {checkout.ProductCategory} ,
+العلامة التجارية: {checkout.Brand} ,
+الموديل: {checkout.Modal}
 
-لأي استفسارات، تواصلوا مع الدعم: {_orderSettings.Email}  
-🎗️ *فريق متجر العوفي*";
+لأي استفسارات، تواصلوا مع الدعم: {_orderSettings.Email}
+🎗️ فريق متجر العوفي";
 
                 var message = MessageResource.Create(
                     body: messageBody,
@@ -123,7 +155,7 @@ namespace ECommerce.BL.Services
 
             var emailData = new EmailDTO
             {
-                Name = $"{UserData.FirstName} {UserData.LastName}",
+                Name = $"{dto.Name}",
                 Contant = contant,
                 Email = _orderSettings.Email, 
                 Subject = "إشعار طلب جديد ",
@@ -247,7 +279,7 @@ namespace ECommerce.BL.Services
                         <td class=""content"" style=""padding: 30px;"">
                             <p style=""font-size: 16px; color: #333;"">عزيزي مدير المتجر،</p>
                             <p style=""font-size: 16px; color: #333;"">
-                                تم تسجيل طلب شراء جديد في <strong>متجر العوفي</strong>. يرجى مراجعة التفاصيل أدناه لاتخاذ الإجراءات اللازمة:
+                                تم تسجيل طلب جديد في <strong>متجر العوفي</strong>. يرجى مراجعة التفاصيل أدناه لاتخاذ الإجراءات اللازمة:
                             </p>
                             <h3 style=""font-size: 18px; color: #333; margin: 20px 0 10px;"">تفاصيل العميل</h3>
                             <table class=""details-table"" width=""100%"" cellpadding=""10"" cellspacing=""0"" style=""font-size: 14px; color: #333;"">
@@ -261,7 +293,7 @@ namespace ECommerce.BL.Services
                                 </tr>
                                 <tr>
                                     <td style=""border: 1px solid #ddd; padding: 10px;""><strong>رقم الهاتف:</strong></td>
-                                    <td style=""border: 1px solid #ddd; padding: 10px;"">{dto.PhoneNumber}</td>
+                                    <td style=""border: 1px solid #ddd; padding: 10px;""><a href='https://wa.me/{dto.PhoneNumber}'>{dto.PhoneNumber}</a></td>
                                 </tr>
                                 <tr>
                                     <td style=""border: 1px solid #ddd; padding: 10px;""><strong>العنوان:</strong></td>
@@ -271,8 +303,8 @@ namespace ECommerce.BL.Services
                             <h3 style=""font-size: 18px; color: #333; margin: 20px 0 10px;"">تفاصيل الطلب</h3>
                             <table class=""details-table"" width=""100%"" cellpadding=""10"" cellspacing=""0"" style=""font-size: 14px; color: #333;"">
                                 <tr>
-                                    <td style=""border: 1px solid #ddd; padding: 10px;""><strong>حالة الطلب:</strong></td>
-                                    <td style=""border: 1px solid #ddd; padding: 10px;"">{dto.Status}</td>
+                                    <td style=""border: 1px solid #ddd; padding: 10px;""><strong>نوع الطلب:</strong></td>
+                                    <td style=""border: 1px solid #ddd; padding: 10px;"">{(dto.RentalPeriod != null ? $"إيجار (مدة الإيجار: {dto.RentalPeriod})" : "شراء")}</td>
                                 </tr>
                             </table>
                             <h3 style=""font-size: 18px; color: #333; margin: 20px 0 10px;"">تفاصيل المنتج</h3>
@@ -284,10 +316,6 @@ namespace ECommerce.BL.Services
                                 <tr>
                                     <td style=""border: 1px solid #ddd; padding: 10px;""><strong>الفئة:</strong></td>
                                     <td style=""border: 1px solid #ddd; padding: 10px;"">{dto.ProductCategory}</td>
-                                </tr>
-                                <tr>
-                                    <td style=""border: 1px solid #ddd; padding: 10px;""><strong>الوصف:</strong></td>
-                                    <td style=""border: 1px solid #ddd; padding: 10px;"">{dto.ProductDescription}</td>
                                 </tr>
                                 <tr>
                                     <td style=""border: 1px solid #ddd; padding: 10px;""><strong>الموديل:</strong></td>
@@ -326,6 +354,7 @@ namespace ECommerce.BL.Services
         }
 
         #endregion
+
 
     }
 }

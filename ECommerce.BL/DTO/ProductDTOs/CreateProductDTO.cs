@@ -13,7 +13,7 @@ namespace ECommerce.BL.DTO.ProductDTOs
         public string Brand { get; set; }
         [Required(ErrorMessage = "Model is required.")]
         public string Model { get; set; }
-        public Dictionary<string, string>? AdditionalAttributes { get; set; }
+        public string? AdditionalAttributes { get; set; }
         [JsonIgnore]
         public Dictionary<string, string>? AdditionalAttributesJson { get; set; }
         [Required(ErrorMessage = "Status is required.")]

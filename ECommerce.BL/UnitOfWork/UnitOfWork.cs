@@ -3,6 +3,7 @@
 using ECommerce.BL.Repository;
 using ECommerce.BL.Services;
 using ECommerce.BL.Services.AuthenticationService;
+using ECommerce.BL.Services.Brand;
 using ECommerce.BL.Services.CategoryServices;
 using ECommerce.BL.Services.EmailServices;
 using ECommerce.BL.Services.ProductServices;
@@ -13,6 +14,7 @@ using ECommerce.DAL.Extend;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
@@ -41,6 +43,7 @@ namespace ECommerce.BL.UnitOfWork
         private readonly IOptions<OrderSettings> _orderSettings;
         private readonly ILogger<UnitOfWork> _unitOfWorkLogger;
         private readonly IOptions<TwilioSettings> _twilioSettings;
+        private readonly IConfiguration _configuration;
 
         #region Services
         private IAuthenticationServices _authenticationService;
@@ -49,6 +52,7 @@ namespace ECommerce.BL.UnitOfWork
         private IProductServices _productService;
         private IUserServices _userService;
         private IOrderService _orderService;
+        private IBrandServices _brandService;
 
         #endregion
 
@@ -162,6 +166,23 @@ namespace ECommerce.BL.UnitOfWork
 
         #endregion
 
+        #region BrandServices
+
+        public IBrandServices brandServices
+        {
+            get
+            {
+                if (_brandService == null)
+                {
+                    _brandService = new BrandServices(_configuration);
+                    return _brandService;
+                }
+                return _brandService;
+            }
+        }
+
+        #endregion
+
         #endregion
 
 
@@ -178,7 +199,8 @@ namespace ECommerce.BL.UnitOfWork
             IOptions<EmailConfiguration> emailConfiguration,
             IOptions<CloudinarySettings> cloudinarySettings,
             IOptions<OrderSettings> orderSettings,
-            IOptions<TwilioSettings> twilioSettings)
+            IOptions<TwilioSettings> twilioSettings,
+            IConfiguration configuration)
         {
             _context = context;
             _roleManager = roleManager;
@@ -193,6 +215,7 @@ namespace ECommerce.BL.UnitOfWork
             _cloudinarySettings = cloudinarySettings;
             _orderSettings = orderSettings;
             _twilioSettings = twilioSettings;
+            _configuration = configuration;
         }
 
 

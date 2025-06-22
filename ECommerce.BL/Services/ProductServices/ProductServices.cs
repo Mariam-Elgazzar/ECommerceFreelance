@@ -89,7 +89,7 @@ namespace ECommerce.BL.Services.ProductServices
             {
                 Name = dto.Name,
                 Description = dto.Description,
-                AdditionalAttributes = additionalAttributesJson,
+                AdditionalAttributes = dto.AdditionalAttributes,
                 Status = dto.Status,
                 MainImageURL = mainImageUrl,
                 ImagePublicId = mainImagePublicId,
@@ -193,8 +193,8 @@ namespace ECommerce.BL.Services.ProductServices
             if (dto.MediaToDelete != null && dto.MediaToDelete.Any())
             {
                 var mediaToDelete = product.ProductMedia
-                    .Where(m => m != null && dto.MediaToDelete.Equals(m?.MediaPublicId))
-                    .ToList();
+                .Where(m => dto.MediaToDelete.Contains(m?.MediaPublicId))
+                .ToList();
                 await DeleteMediaAsync(mediaToDelete);
                 await _unitOfWork.Repository<ProductMedia>().DeleteRangeAsync(mediaToDelete);
             }
