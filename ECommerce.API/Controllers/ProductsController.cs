@@ -90,7 +90,7 @@ namespace ECommerce.API.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, new ResultDTO
                 {
                     IsSuccess = false,
-                    Message = "An error occurred while processing your request."
+                    Message = ex.Message
                 });
             }
         }
@@ -163,7 +163,7 @@ namespace ECommerce.API.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, new ResultDTO
                 {
                     IsSuccess = false,
-                    Message = "An error occurred while processing your request."
+                    Message = ex.Message
                 });
             }
         }
@@ -216,7 +216,7 @@ namespace ECommerce.API.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, new ResultDTO
                 {
                     IsSuccess = false,
-                    Message = "An error occurred while processing your request."
+                    Message = ex.Message
                 });
             }
         }
@@ -274,7 +274,7 @@ namespace ECommerce.API.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, new ResultDTO
                 {
                     IsSuccess = false,
-                    Message = "An error occurred while processing your request."
+                    Message = ex.Message
                 });
             }
         }
@@ -337,7 +337,7 @@ namespace ECommerce.API.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, new ResultDTO
                 {
                     IsSuccess = false,
-                    Message = "An error occurred while processing your request."
+                    Message = ex.Message
                 });
             }
         }

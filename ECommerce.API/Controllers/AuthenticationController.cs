@@ -131,7 +131,7 @@ namespace ECommerce.API.Controllers
                 _logger.LogError(ex, "Unexpected error during registration for email: {Email}", data.Email);
                 return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
-                    Message = "An error occurred while processing your request"
+                    Message = ex.Message
                 });
             }
         }
@@ -239,7 +239,7 @@ namespace ECommerce.API.Controllers
                 _logger.LogError(ex, "Unexpected error during login for email: {Email}", data.Email);
                 return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
-                    Message = "An error occurred while processing your request"
+                    Message = ex.Message
                 });
             }
         }
@@ -328,7 +328,7 @@ namespace ECommerce.API.Controllers
                 _logger.LogError(ex, "Unexpected error during password reset for email: {Email}", dto.Email);
                 return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
-                    Message = "An error occurred while processing your request"
+                    Message = ex.Message
                 });
             }
         }
@@ -419,7 +419,7 @@ namespace ECommerce.API.Controllers
                 _logger.LogError(ex, "Unexpected error during password reset for email: {Email}", dto.Email);
                 return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
-                    Message = "An error occurred while processing your request"
+                    Message = ex.Message
                 });
             }
         }
@@ -516,7 +516,7 @@ namespace ECommerce.API.Controllers
                 _logger.LogError(ex, "Unexpected error during password change for user ID: {UserId}", dto.UserId);
                 return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
-                    Message = "An error occurred while processing your request"
+                    Message = ex.Message
                 });
             }
         }

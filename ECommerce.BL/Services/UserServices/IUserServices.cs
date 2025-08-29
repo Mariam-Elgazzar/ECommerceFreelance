@@ -23,8 +23,9 @@ namespace ECommerce.BL.Services.UserServices
         /// <param name="id">The ID of the user to retrieve.</param>
         /// <returns>A UserDTO containing user details if found; otherwise, null.</returns>
         Task<UserDTO> GetUserByIdAsync(string userId);
+
         //Task<List<UserDTO>> GetAllUsersAsync(bool? isDeleted = null);
-       
+
         /// <summary>
         /// Updates a user's details based on the provided DTO.
         /// </summary>

@@ -18,7 +18,7 @@ namespace ECommerce.BL.DTO.ProductDTOs
         public string? Model { get; set; }
         public string? MainImageURL { get; set; }
         public string? ImagePublicId { get; set; }
-        public int CategoryId { get; set; }
+        public int? CategoryId { get; set; }
         public int Quantity { get; set; }
         public string? CategoryName { get; set; }
         public DateTime CreatedAt { get; set; }

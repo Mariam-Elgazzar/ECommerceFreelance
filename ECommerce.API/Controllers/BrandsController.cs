@@ -1,4 +1,6 @@
-﻿using ECommerce.BL.UnitOfWork;
+﻿using ECommerce.BL.Helper;
+using ECommerce.BL.UnitOfWork;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -23,6 +25,7 @@ namespace ECommerce.API.Controllers
 
         [HttpGet]
         [Route("~/Brands/GetAllBrands")]
+        //[Authorize(Roles = $"{Roles.Admin}, {Roles.User}")]
         public async Task<IActionResult> GetAllBrands()
         {
             try
@@ -33,7 +36,7 @@ namespace ECommerce.API.Controllers
             catch (Exception ex)
             {
                 // Log the exception (ex) here if needed
-                return StatusCode(StatusCodes.Status500InternalServerError, "An error occurred while retrieving the brands.");
+                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
             }
         }
     }

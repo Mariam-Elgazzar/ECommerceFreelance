@@ -388,7 +388,7 @@ namespace ECommerce.API.Controllers
                 _logger.LogError(ex, "Unexpected error while updating user with ID: {UserId}.", id);
                 return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
-                    Message = "An error occurred while processing your request"
+                    Message = ex.Message
                 });
             }
         }
@@ -486,7 +486,7 @@ namespace ECommerce.API.Controllers
                 _logger.LogError(ex, "Unexpected error while toggling block status for user with ID: {UserId}.", id);
                 return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
-                    Message = "An error occurred while processing your request"
+                    Message = ex.Message
                 });
             }
         }

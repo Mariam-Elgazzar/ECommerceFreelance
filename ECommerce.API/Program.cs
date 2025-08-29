@@ -69,7 +69,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddControllers();
 #endregion
 
-
+ 
 #region OpenAPI Configuration
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
@@ -182,14 +182,23 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddCors(options =>
 {
-    options.AddDefaultPolicy(builder =>
+    options.AddPolicy("AllowAll", builder =>
     {
-        builder.WithOrigins("http://localhost:4200")
+        builder.AllowAnyOrigin()
                .AllowAnyMethod()
-               .AllowCredentials()
                .AllowAnyHeader();
+
     });
 });
+//builder.WithOrigins(
+//    "http://localhost:4200", 
+//    "http://localhost:4000", 
+//    "https://heavyequipments.vercel.app", 
+//    "https://e-commerce-admin-seven-blond.vercel.app",
+//    "https://heavyequipments-bay.vercel.app")
+//       .AllowAnyMethod()
+//       .AllowCredentials()
+//       .AllowAnyHeader();
 
 #endregion
 
@@ -273,7 +282,7 @@ app.UseSwaggerUI(options =>
 #endregion
 
 #region Cors Meddelwere
-app.UseCors();
+app.UseCors("AllowAll");
 #endregion
 
 #region HTTPS Meddleware

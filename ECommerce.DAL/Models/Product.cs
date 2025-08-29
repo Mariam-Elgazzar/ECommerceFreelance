@@ -19,8 +19,7 @@ namespace ECommerce.DAL.Models
         public int Quantity { get; set; }
         public string? MainImageURL { get; set; }
         public string? ImagePublicId { get; set; }
-        [Required]
-        public int CategoryId { get; set; }
+        public int? CategoryId { get; set; }
         public Category? Category { get; set; }
         public DateTime CreatedAt { get; set; }
         public List<ProductMedia> ProductMedia { get; } = new List<ProductMedia>();

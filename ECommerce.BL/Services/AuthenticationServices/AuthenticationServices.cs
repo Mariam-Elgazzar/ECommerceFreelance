@@ -2,18 +2,14 @@
 using ECommerce.BL.DTO.EmailDTOs;
 using ECommerce.BL.DTO.GlobalDTOs;
 using ECommerce.BL.Helper;
-using ECommerce.BL.Services.EmailServices;
 using ECommerce.BL.Settings;
 using ECommerce.BL.UnitOfWork;
-using ECommerce.DAL.Data;
 using ECommerce.DAL.Extend;
-using ECommerce.DAL.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.ComponentModel.DataAnnotations;
-using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -246,10 +242,7 @@ namespace ECommerce.BL.Services.AuthenticationService
             }
             catch (Exception ex)
             {
-                return new ResultDTO
-                {
-                    Message = "An error occurred while processing your request."
-                };
+                throw;
             }
         }
 
@@ -288,7 +281,7 @@ namespace ECommerce.BL.Services.AuthenticationService
             }
             catch (Exception ex)
             {
-                return $"An error occurred while resetting your password: {ex.Message}";
+                throw;
             }
         }
 
@@ -332,7 +325,7 @@ namespace ECommerce.BL.Services.AuthenticationService
             }
             catch (Exception ex)
             {
-                return $"An error occurred while changing your password: {ex.Message}";
+                throw;
             }
         }
 

@@ -5,6 +5,7 @@ using ECommerce.BL.Services;
 using ECommerce.BL.Services.AuthenticationService;
 using ECommerce.BL.Services.Brand;
 using ECommerce.BL.Services.CategoryServices;
+using ECommerce.BL.Services.DashboardServices;
 using ECommerce.BL.Services.EmailServices;
 using ECommerce.BL.Services.ProductServices;
 using ECommerce.BL.Services.UserServices;
@@ -53,6 +54,7 @@ namespace ECommerce.BL.UnitOfWork
         private IUserServices _userService;
         private IOrderService _orderService;
         private IBrandServices _brandService;
+        private IDashboardServices _dashboardService;
 
         #endregion
 
@@ -178,6 +180,23 @@ namespace ECommerce.BL.UnitOfWork
                     return _brandService;
                 }
                 return _brandService;
+            }
+        }
+
+        #endregion
+
+
+        #region DashboardServices
+        public IDashboardServices DashboardServices
+        {
+            get
+            {
+                if (_dashboardService == null)
+                {
+                    _dashboardService = new DashboardServices(_configuration);
+                    return _dashboardService;
+                }
+                return _dashboardService;
             }
         }
 

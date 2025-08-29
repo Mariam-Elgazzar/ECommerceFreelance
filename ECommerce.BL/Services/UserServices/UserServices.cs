@@ -2,15 +2,8 @@
 using ECommerce.BL.DTO.UserDTOs;
 using ECommerce.BL.Specification.UserSpecification;
 using ECommerce.BL.UnitOfWork;
-using ECommerce.DAL.Data;
 using ECommerce.DAL.Extend;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace ECommerce.BL.Services.UserServices
 {
@@ -111,19 +104,15 @@ namespace ECommerce.BL.Services.UserServices
 
             var user = await _userManager.FindByIdAsync(userDto.Id);
             if (user == null)
-            {
                 return "User not found.";
-            }
 
-            // Update user properties
-            user.FirstName = userDto.FName;
-            user.LastName = userDto.LName;
-            user.Email = userDto.Email;
-            user.UserName = userDto.Email; // Assuming UserName is tied to Email in Identity
-            user.PhoneNumber = userDto.PhoneNumber;
-            user.Address = userDto.Address;
+            user.FirstName = userDto.FName ?? user.FirstName;
+            user.LastName = userDto.LName ?? user.LastName;
+            user.Email = userDto.Email ?? user.Email;
+            user.UserName = userDto.Email ?? user.Email;
+            user.PhoneNumber = userDto.PhoneNumber ?? user.PhoneNumber;
+            user.Address = userDto.Address ?? user.Address ;
 
-            // Save changes
             var result = await _userManager.UpdateAsync(user);
             if (!result.Succeeded)
             {
@@ -178,6 +167,7 @@ namespace ECommerce.BL.Services.UserServices
             return $"User {(isBlock ? "blocked" : "unblocked")} successfully.";
         }
         #endregion
+
     }
 }
 
